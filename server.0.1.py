@@ -85,7 +85,12 @@ def initWebSocketServer(eyetrackerController):
 	printWithTime("Websocker server initiated.")
 
 
-def dumpingProcessCode(dataQueue):
+def dumpingProcessCode(dataQueue, lock):
+
+	def printWithLock(message):
+		lock.acquire()
+		printWithTime(message)
+		lock.release()
 
 	def formatGazeData(data):
 
@@ -147,7 +152,8 @@ def dumpingProcessCode(dataQueue):
 			queueItem = dataQueue.get()	# blocks by default until a queue item is available
 
 			if queueItem == 'stop':
-				print "Gaze data dumping thread received a 'stop' command, exiting"
+				printWithLock("Gaze dumping process received a 'stop' command, exiting")
+				# print "Gaze data dumping thread received a 'stop' command, exiting"
 				break
 
 			# write to file
@@ -156,19 +162,22 @@ def dumpingProcessCode(dataQueue):
 		except Empty:
 			# this is raised if queue was empty when .get(block=False) was called, or if 
 			# timeout for .get(block=True, timeout) was exceeded without receiving a queue item
-			print "Gaze data dumping queue raised an 'empty' exception, exiting"
+			printWithLock("Gaze dumping queue raised an 'empty' exception, exiting")
+			# print "Gaze data dumping queue raised an 'empty' exception, exiting"
 			break
 
 		except KeyboardInterrupt:
 			# this won't be caught until the process is unblocked (e.g. by sending a "stop" item down the queue)
-			print "Gaze data dumping thread caught a KeyboardInterrupt exception, exiting"
+			printWithLock("Gaze dumping process caught a KeyboardInterrupt exception, exiting")
+			# print "Gaze data dumping thread caught a KeyboardInterrupt exception, exiting"
 			break
 
 	# the lines below are called after the infinite loop is broken
 
 	# close file
 	outputFile.close()
-	print "Gaze data dumping thread closed output file successfully"
+	printWithLock("Gaze dumping process closed output file successfully")
+	# print "Gaze data dumping thread closed output file successfully"
 
 
 class eyetrackerController:
@@ -181,6 +190,7 @@ class eyetrackerController:
 	def __init__(self):
 		self.connectedToEyetracker = False
 		self.collectingData = False
+		self.processLock = multiprocessing.Lock()
 
 	def locateEyetracker(self):
 
@@ -248,11 +258,15 @@ class eyetrackerController:
 			printWithTime("Can't subscribe to gaze data, no eyetracker found.")
 
 	def unsubscribe(self):
+		
 		if self.tracker:
+			
 			self.tracker.unsubscribe_from(tobii.EYETRACKER_GAZE_DATA)
 			self.collectingData = False
+			
 			# print "Unsubscribed from gaze data."
-			printWithTime("Unsubscribed from gaze data.")
+			# printWithTime("Unsubscribed from gaze data.")
+			self.printWithLock("Unsubscribed from gaze data.")
 
 		else:
 			# print "Can't unsubscribe from gaze data, no eyetracker found. Also, this shouldn't be happening."
@@ -313,16 +327,18 @@ class eyetrackerController:
 
 		# self.dumpingProcess = multiprocessing.Process(target=self.dumpingProcessCode, args=(self.dataQueue,))						# pass an instance method
 		# self.dumpingProcess = multiprocessing.Process(target=eyetrackerController.dumpingProcessCode, args=(self.dataQueue,))		# pass a static method
-		self.dumpingProcess = multiprocessing.Process(target=dumpingProcessCode, args=(self.dataQueue,))							# pass a global function
+		self.dumpingProcess = multiprocessing.Process(target=dumpingProcessCode, args=(self.dataQueue,self.processLock))			# pass a global function
 		self.dumpingProcess.start()
 
 	def stopDumpingData(self):
+		
 		if hasattr(self, "dataQueue"):
 			
 			# break the loop in the dumping process
 			self.dataQueue.put("stop")
 			
-			printWithTime("Placed 'stop' into the data dumping queue")
+			# printWithTime("Placed 'stop' into the data dumping queue")
+			self.printWithLock("Placed 'stop' into the data dumping queue")
 
 	def startDataCollection(self):
 		self.startDumpingData()
@@ -345,7 +361,8 @@ class eyetrackerController:
 
 	def signalHandler(self, signal, frame):
 		
-		printWithTime("Caught SIGINT")
+		# printWithTime("Caught SIGINT")
+		self.printWithLock("Caught SIGINT")
 
 		# unsubscribe from gaze data
 		self.stopDataCollection()
@@ -359,6 +376,11 @@ class eyetrackerController:
 		printWithTime("Clean-up done, exiting")
 
 		sys.exit(0)
+
+	def printWithLock(self, message):
+		self.processLock.acquire()
+		printWithTime(message)
+		self.processLock.release()
 
 
 def init():
