@@ -190,14 +190,9 @@
 
                         // signify this visually
                         
-                        $("#connectedToServerLight").removeClass("yes");
-                        $("#connectedToServerLight").addClass("no");
+                        $(".light").removeClass("yes");
+                        $(".light").addClass("no");
                         
-                        $("#connectedToTrackerLight").removeClass("yes");
-                        $("#connectedToTrackerLight").addClass("no");
-
-                        // why not turn off collecting data light?
-
                         $("button").attr("disabled", "disabled");
 
                         expectingStart = false;
