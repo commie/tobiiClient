@@ -1,0 +1,408 @@
+<html>
+    <head>
+        <title>Websocket Client</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+        
+        <!-- Libraries -->
+        <script type='text/javascript' src='jquery-3.1.1.min.js'></script>
+        <!-- <script type='text/javascript' src='log4javascript-1.4.6.js'></script> -->
+        <!-- <script type='text/javascript' src='util.js'></script> -->
+        
+        <!-- Project modules -->
+        <!-- <script type='text/javascript' src='websocketClient.js'></script> -->
+
+        <style>
+
+            svg {
+                outline-color:      gainsboro;
+                outline-style:      solid;
+            }
+
+            .fakeLink {
+                text-decoration:    underline;
+                color:              #2E458A;
+            }
+
+            .fakeLink:hover {
+                text-decoration:    none;
+                cursor:             pointer;
+            }
+
+            .eyeMarker {
+                position:           fixed;
+                top:                0;
+                left:               0;
+            }
+
+            .yes {
+                background-color: #d5f4e6;
+            }
+
+            .yes::after {
+                content: " (yes)";
+            }
+
+            .no {
+                background-color: #f18973;
+            }
+
+            .no::after {
+                content: " (no)";
+            }
+
+            .light {
+                max-width: 500;
+            }
+
+        </style>
+
+        <script>
+            
+            $(document).ready(function() {
+
+                var expectingStart = false,
+                    expectingStop = false;
+
+                var networkInterface = {};
+
+                var leftMarker = document.getElementById("leftMarker"),
+                    rightMarker = document.getElementById("rightMarker");
+
+                var svgCanvasOffsetX = $("#svgCanvas")[0].getBoundingClientRect().left, 
+                    svgCanvasOffsetY = $("#svgCanvas")[0].getBoundingClientRect().top;
+
+                var launchSocketRequest = function (wsUrl) {
+
+                    var protocol = 'http',
+                        statusRequestTimer;
+    
+                    var socket = new WebSocket(wsUrl, protocol);
+                    console.log("Requested a socket connection with " + wsUrl + " using " + protocol + " as protocol.");
+
+                    socket.onopen = function(event) {
+                        
+                        console.log("Socket connection established.");
+
+                        // signify this visually
+                        $("#connectedToServerLight").removeClass("no");
+                        $("#connectedToServerLight").addClass("yes");
+
+                        // ping server about the status of data collection on regular basis
+                        statusRequestTimer = setInterval(function () {
+                            
+                            onRequestStatusClick();
+
+                        }, 1000);
+
+
+                    }
+                    
+                    socket.onmessage = function (event) {
+
+                        // console.log("Received data from server: " + event.data);
+
+                        var message = JSON.parse(event.data);
+
+                        if (message.gazeData) {
+                            
+                            // process eye gaze data
+
+                            gazePoint = message;
+
+                            leftMarker.setAttribute("cx", gazePoint.lx - svgCanvasOffsetX);
+                            leftMarker.setAttribute("cy", gazePoint.ly - svgCanvasOffsetY);
+
+                            rightMarker.setAttribute("cx", gazePoint.rx - svgCanvasOffsetX);
+                            rightMarker.setAttribute("cy", gazePoint.ry - svgCanvasOffsetY);
+                        }
+
+                        if (message.statusReport) {
+                            
+                            // process status report
+
+                            console.log("Status report: " + event.data);
+
+                            statusReport = message.statusReport;
+
+                            if (statusReport.connectedToEyetracker === true) {
+                            
+                                $("#connectedToTrackerLight").removeClass("no");
+                                $("#connectedToTrackerLight").addClass("yes");
+
+                                if (statusReport.collectingData === true) {
+                                
+                                    $("#collectingDataLight").removeClass("no");
+                                    $("#collectingDataLight").addClass("yes");
+
+                                    if (!expectingStop) {
+                                        $("#collectDataButton").attr("disabled", "disabled");
+                                        $("#stopDataButton").removeAttr("disabled");
+                                    }
+
+                                    if (expectingStart) {
+                                        expectingStart = false;
+                                    }
+
+                                } else {
+                                    
+                                    $("#collectingDataLight").removeClass("yes");
+                                    $("#collectingDataLight").addClass("no");
+
+                                    if (!expectingStart) {
+                                        $("#collectDataButton").removeAttr("disabled");
+                                        $("#stopDataButton").attr("disabled", "disabled");
+                                    }
+
+                                    if (expectingStop) {
+                                        expectingStop = false;
+                                    }
+                                    
+                                }
+                            
+                            } else {
+                                
+                                $("#connectedToTrackerLight").removeClass("yes");
+                                $("#connectedToTrackerLight").addClass("no");
+
+                                $("#collectingDataLight").removeClass("yes");
+                                $("#collectingDataLight").addClass("no");
+
+                                $("button").attr("disabled", "disabled");
+
+                                expectingStart = false;
+                                expectingStop = false;
+                            }
+
+                            
+
+                        }
+
+                    }
+                    
+                    socket.onclose = function (event) {
+                        
+                        console.log("Socket connection closed.");
+
+                        if (statusRequestTimer) {
+                            clearInterval(statusRequestTimer);
+                            console.log("Stopped server status updates.");
+                        }
+
+                        // signify this visually
+                        
+                        $("#connectedToServerLight").removeClass("yes");
+                        $("#connectedToServerLight").addClass("no");
+                        
+                        $("#connectedToTrackerLight").removeClass("yes");
+                        $("#connectedToTrackerLight").addClass("no");
+
+                        // why not turn off collecting data light?
+
+                        $("button").attr("disabled", "disabled");
+
+                        expectingStart = false;
+                        expectingStop = false;
+                    }
+
+                    socket.onerror = function (event) {
+                        console.log("Socket error.")
+                    }
+                    
+                    return socket;
+                }
+
+
+                var initSocket = function (ip, port) {
+
+                    // Form the request
+                    var wsUrl = "ws://" + ip + ":" + port;  // 128.118.54.231
+                    
+                    // Launch the request
+                    networkInterface.socket = launchSocketRequest(wsUrl);
+
+                }
+
+
+                var sendMessage = function (jsonObject) {
+
+                    // Send event over the network
+
+                    if (networkInterface.socket.readyState == WebSocket.OPEN) {
+                        // networkInterface.socket.send(JSON.stringify(jsonObject));
+                        networkInterface.socket.send(jsonObject);
+                    } else {
+                        console.log("Socket isn't ready for data to be sent.")
+                    }
+                }
+
+
+                var onSendEventClick = function (flag) {
+
+                    console.log("\"" + flag + "\" clicked");
+
+                    var serverMessage = "";
+
+                    if (flag === 1) {
+
+                        serverMessage = flag;
+
+                    } else if (flag === 2) {
+
+                        serverMessage = flag;
+
+                    } else if (flag === 3) {
+
+                        serverMessage = flag;
+
+                    } else if (flag === 4) {
+
+                        serverMessage = flag;
+
+                    } else if (flag === 5) {
+
+                        serverMessage = flag;
+                    }
+
+                    // send a message to the server
+                    sendMessage(serverMessage);
+
+                }
+
+                var onStartDataCollectionClick = function () {
+
+                    $("#collectDataButton").attr("disabled", "disabled");
+
+                    expectingStart = true;
+
+                    var message = JSON.stringify({
+                        request: "startDataCollection"
+                    });
+
+                    sendMessage(message);
+                }
+
+                var onStopDataCollectionClick = function () {
+
+                    $("#stopDataButton").attr("disabled", "disabled");
+
+                    expectingStop = true;
+                    
+                    var message = JSON.stringify({
+                        request: "stopDataCollection"
+                    });
+
+                    sendMessage(message);
+                }
+
+                var onRequestStatusClick = function () {
+                    
+                    var message = JSON.stringify({
+                        request: "reportStatus"
+                    });
+
+                    sendMessage(message);
+                }
+
+                var onDumpAttachmentClick = function () {
+                    
+                    var message = JSON.stringify({
+                        request: "dumpAttachment",
+                        attachment: {
+                            sampleField: "sample value"
+                        }
+                    });
+
+                    sendMessage(message);
+                }
+                
+                // connect to websocket server
+                initSocket("127.0.0.1", 8080);
+
+                // register event handler for link click
+
+                // $("#sendTestMsgLink").click(function(){onSendEventClick(1)});
+                // $("#sendEnterCalLink").click(function(){onSendEventClick(2)});
+                // $("#sendCollectCalLink").click(function(){onSendEventClick(3)});
+                
+                // $("#sendCollectDataLink").click(onStartDataCollectionClick);
+                // $("#sendStopDataLink").click(onStopDataCollectionClick);
+                $("#sendRequestStatusLink").click(onRequestStatusClick);
+                $("#sendDumpAttachmentLink").click(onDumpAttachmentClick);
+
+                $("#collectDataButton").click(onStartDataCollectionClick);
+                $("#stopDataButton").click(onStopDataCollectionClick);
+
+                // initiate styles for status display
+                $(".light").addClass("no");
+                $("button").attr("disabled", "disabled");
+
+                // fake incoming data
+
+                // var svgCanvas = document.getElementById("svgCanvas"),
+                //     leftMarker = svgCanvas.contentDocument.getElementById("leftMarker"),
+                //     rightMarker = svgCanvas.contentDocument.getElementById("rightMarker");
+
+                
+
+                // setInterval(function () {
+                    
+                //     var x1 = 1000 * Math.random(),
+                //         y1 = 1000 * Math.random(),
+                //         x2 = 1000 * Math.random(),
+                //         y2 = 1000 * Math.random();
+
+                //     leftMarker.setAttribute("cx", x1);
+                //     leftMarker.setAttribute("cy", y1);
+
+                //     rightMarker.setAttribute("cx", x2);
+                //     rightMarker.setAttribute("cy", y2);
+
+                // }, 1000); // this imitates 1,000 Hz
+
+            });
+            
+        </script>
+        
+    </head>
+    
+    <body>
+
+        <div>
+            <svg id="svgCanvas" width="500" height="500">
+                <!--rect width="2" height="2" fill="black" /-->
+                <circle id="leftMarker" cx="50" cy="50" r="2" fill="orange" />
+                <circle id="rightMarker" cx="100" cy="50" r="2" fill="teal" />
+            </svg>
+        </div>
+        
+        
+        <!--div class="eyeMarker">*</div-->
+<!-- 
+        <div id="sendTestMsgLink" class="fakeLink">Send test message</div>
+        <div id="sendEnterCalLink" class="fakeLink">Enter calibration mode</div>
+        <div id="sendCollectCalLink" class="fakeLink">Collect calibration point</div> -->
+
+        <br/>
+
+        <div id="connectedToServerLight" class="light">Connected to server</div>
+        <div id="connectedToTrackerLight" class="light">Connected to tracker</div>
+        <div id="collectingDataLight" class="light">Collecting gaze data</div>
+
+        <br/>
+        
+        <div>
+            <button type="button" id="collectDataButton">Start data collection</button>
+            <button type="button" id="stopDataButton">Stop data collection</button>
+        </div>
+
+<!--         <div id="sendCollectDataLink" class="fakeLink">Start data collection</div>
+        <div id="sendStopDataLink" class="fakeLink">Stop data collection</div> -->
+        
+        <br/>
+        
+        <div id="sendRequestStatusLink" class="fakeLink">Request server status</div>
+        <div id="sendDumpAttachmentLink" class="fakeLink">Request data dump</div>
+
+    </body>
+
+</html>
