@@ -113,7 +113,6 @@ def dumpingProcessCode(dataQueue):
 
 		return outputStr
 
-
 	# create new gaze data file
 
 	fileName = "gazeData." + time.strftime("%Y.%m.%d.at.%H.%M.%S") + ".out"
@@ -161,6 +160,7 @@ def dumpingProcessCode(dataQueue):
 			break
 
 		except KeyboardInterrupt:
+			# this won't be caught until the process is unblocked (e.g. by sending a "stop" item down the queue)
 			print "Gaze data dumping thread caught a KeyboardInterrupt exception, exiting"
 			break
 
@@ -374,6 +374,7 @@ def init():
 	signal.signal(signal.SIGINT, controller.signalHandler)
 
 	# prevent the main process from exiting
+	# this keeps the signal handler active, otherwise only the gaze dumping process intercepts the Ctrl+C
 	while True:
 		pass
 
