@@ -1,14 +1,13 @@
-#imports
+# imports
 
-import sys
-from websocket_server import WebsocketServer
 import tobii_research as tobii
-import time
-import multiprocessing
-import threading
-from Queue import Empty # exception for when an empty queue is accessed?
-import json
-import signal
+
+import json, signal, sys, time
+import multiprocessing, threading
+from Queue import Empty
+
+from imports.websocket_server import WebsocketServer
+
 
 def printWithTime(message):
 	outputStr = time.strftime("%Y.%m.%d.at.%H.%M.%S") + ": " + message
