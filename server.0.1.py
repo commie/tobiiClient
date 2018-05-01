@@ -84,6 +84,8 @@ def initWebSocketServer(eyetrackerController):
 	# print("Websocker server initiated.")
 	printWithTime("Websocker server initiated.")
 
+	return server_thread
+
 
 def dumpingProcessCode(dataQueue, lock):
 
@@ -390,15 +392,18 @@ def init():
 	controller.locateEyetracker()
 
 	# init websocker server
-	initWebSocketServer(controller)
+	serverThread = initWebSocketServer(controller)
 
 	# override Ctrl-C for clean exit
 	signal.signal(signal.SIGINT, controller.signalHandler)
 
 	# prevent the main process from exiting
-	# this keeps the signal handler active, otherwise only the gaze dumping process intercepts the Ctrl+C
+	# this keeps the signal handler active
 	while True:
-		pass
+		time.sleep(60) # this intercepts Ctrl+C fine
+		# pass
+
+	# serverThread.join() # this doesn't intercept Ctrl+C
 
 if __name__ == '__main__':
 	init()
