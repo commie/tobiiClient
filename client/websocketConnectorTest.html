@@ -1,0 +1,88 @@
+<html>
+    <head>
+        <title>Websocket Client</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+        
+        <!-- Libraries -->
+        <script type='text/javascript' src='jquery-3.1.1.min.js'></script>
+        <!-- <script type='text/javascript' src='log4javascript-1.4.6.js'></script> -->
+        <!-- <script type='text/javascript' src='util.js'></script> -->
+        
+        <!-- Project modules -->
+        <script type='text/javascript' src='websocketConnector.js'></script>
+
+        <style>
+
+            svg {
+                outline-color:      gainsboro;
+                outline-style:      solid;
+            }
+
+            .fakeLink {
+                text-decoration:    underline;
+                color:              #2E458A;
+            }
+
+            .fakeLink:hover {
+                text-decoration:    none;
+                cursor:             pointer;
+            }
+
+            .eyeMarker {
+                position:           fixed;
+                top:                0;
+                left:               0;
+            }
+
+            .yes {
+                background-color: #d5f4e6;
+            }
+
+            .yes::after {
+                content: " (yes)";
+            }
+
+            .no {
+                background-color: #f18973;
+            }
+
+            .no::after {
+                content: " (no)";
+            }
+
+            .light {
+                max-width: 500;
+            }
+
+        </style>
+
+        <script>
+            
+            $(document).ready(function() {
+
+                sampleReport = {
+                    request:    "dumpAttachment",
+                    attachment: {
+                        sampleField: "sampleValue"
+                    }
+                };
+
+                // websocketConnector.initSocket("127.0.0.1", 8080);
+                
+                // setTimeout(function () {
+                //     websocketConnector.sendMessage(sampleReport);
+                // }, 2000);
+
+                websocketConnector.initAndSend("127.0.0.1", 8080, sampleReport);
+
+            });
+            
+        </script>
+        
+    </head>
+    
+    <body>
+
+    </body>
+
+</html>
